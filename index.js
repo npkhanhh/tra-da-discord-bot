@@ -2,17 +2,22 @@ const Discord = require('discord.js');
 const axios = require('axios').default;
 const fs = require('fs');
 const client = new Discord.Client();
-const avatar_folder = './avatar/'
+const avatar_folder = '/home/fedora/discord-bot/avatar/'
 
 const PREFIX = '.'
 const ideas = []
 const posted_urls = {}
 const posted_ids = {}
+const hackernews_urls = {}
+const hackernews_ids = {}
 const seek_id = {}
 const subs = {
-  'programming': {'channel':'xxx', threshold: 600},
-  'interestingasfuck': {'channel':'yyyy', threshold: 25000}
+  'programming': {'channels':['701284529758928928', '915499022226165802'], threshold: 600},
+  'interestingasfuck': {'channels':['751281861224824912'], threshold: 25000}
 }
+
+const HACKER_NEWS_THRESHOLD = 250
+const HACKER_NEWS_CHANNELS = ['701284529758928928', '915499022226165802']
 
 
 const get_random_avatar = () => {
@@ -33,6 +38,7 @@ client.once('ready', () => {
       for (const sub_name of Object.keys(subs)) {
         check_reddit(sub_name, subs[sub_name], true)
       }
+      check_hackernews(HACKER_NEWS_THRESHOLD, HACKER_NEWS_CHANNELS, true)
     } else if (now.getMinutes() === 50) {
       can_post = true
       if (!avatar_changed) {
@@ -46,7 +52,7 @@ client.once('ready', () => {
 });
 
 
-client.login('xxxx');
+client.login('');
 
 // client.on('message', message => {
 //   if (message.channel.name === 'ideas') {
@@ -77,20 +83,44 @@ client.login('xxxx');
 // });
 
 
-const check_reddit = async (sub_name, {channel, threshold}, send_message) => {
+const check_reddit = async (sub_name, {channels, threshold}, send_message) => {
   const response = await axios.get(`https://reddit.com/r/${sub_name}/hot/.json`)
   response.data.data.children.forEach(({data}) => {
-    const {score, total_awards_received, permalink, id, url, title} = data
+    const {score, total_awards_received, permalink, id, url, title, over_18} = data
+    const spoiler_tag = over_18 ? '||' : ''
     if (!(id in posted_ids) && !(url in posted_urls)) {
       if (score + 100 * total_awards_received >= threshold) {
         posted_urls[url] = true
         posted_ids[id] = true
         if (send_message) {
-          client.channels.cache.get(channel).send(
-            `**${title}** \nurl: ${url} \nreddit url: https://reddit.com${permalink}`)
+	  for (let channel of channels) {
+            client.channels.cache.get(channel).send(
+              `**${title}** \nurl: ${spoiler_tag+url+spoiler_tag} \nreddit url: https://reddit.com${permalink}`)
+	  }
         }
       }
     }
+  })
+}
+
+const check_hackernews = async (threshold, channels, send_message) => {
+  const response = await axios.get(`https://hacker-news.firebaseio.com/v0/topstories.json`)
+  // noinspection ES6MissingAwait
+  response.data.forEach(async (storyId) => {
+    const storyResponse = await axios.get(`https://hacker-news.firebaseio.com/v0/item/${storyId}.json`)
+    const {score, id, url, title} = storyResponse.data
+      if (!(id in hackernews_ids) && !(url in hackernews_urls)) {
+        if (score  >= threshold) {
+          hackernews_urls[url] = true
+          hackernews_ids[id] = true
+          if (send_message) {
+	    for (let channel of channels) {
+               client.channels.cache.get(channel).send(
+                 `**${title}** \nurl: ${url} \nhackernews url: https://news.ycombinator.com/item?id=${id}`)
+	    }
+          }
+        }
+      }
   })
 }
 
@@ -118,3 +148,4 @@ for (const sub_name of Object.keys(subs)) {
   check_reddit(sub_name, subs[sub_name], false)
 }
 
+check_hackernews(HACKER_NEWS_THRESHOLD, HACKER_NEWS_CHANNELS, false)
