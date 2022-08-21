@@ -1,6 +1,7 @@
 const Discord = require('discord.js');
 const axios = require('axios').default;
 const fs = require('fs');
+const cheerio = require('cheerio');
 const client = new Discord.Client();
 const avatar_folder = '/home/fedora/discord-bot/avatar/'
 
@@ -18,6 +19,17 @@ const subs = {
 
 const HACKER_NEWS_THRESHOLD = 250
 const HACKER_NEWS_CHANNELS = ['701284529758928928', '915499022226165802']
+
+const WORD_OF_THE_DAY_CHANNEL = '1010803094201827368'
+
+
+
+const axiosInstance = axios.create()
+axiosInstance.defaults.headers = {
+  'Cache-Control': 'no-cache',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
 
 
 const get_random_avatar = () => {
@@ -39,6 +51,9 @@ client.once('ready', () => {
         check_reddit(sub_name, subs[sub_name], true)
       }
       check_hackernews(HACKER_NEWS_THRESHOLD, HACKER_NEWS_CHANNELS, true)
+      if (now.getHours() === 7) {
+          word_of_the_day(true);
+      }
     } else if (now.getMinutes() === 50) {
       can_post = true
       if (!avatar_changed) {
@@ -125,6 +140,30 @@ const check_hackernews = async (threshold, channels, send_message) => {
 }
 
 
+const word_of_the_day = async (send_message) => {
+    const response = await axiosInstance.get(`https://www.merriam-webster.com/word-of-the-day`)
+    const $ = cheerio.load(response.data);
+
+    const word = $(".quick-def-box h1").text();
+    const partOfSpeech = $(".quick-def-box .main-attr").text();
+    const syllables = $(".quick-def-box .word-syllables").text();
+    let definition, example;
+    $(".wod-definition-container")
+        .find("p")
+        .each(function (i, el) {
+            if (i===0) {
+                definition = $(el).text();
+            } else if (i === 1) {
+                example = $(el).text();
+            }
+    });
+    if(send_message) {
+        client.channels.cache.get(WORD_OF_THE_DAY_CHANNEL)
+            .send(`**${word}** \n *${partOfSpeech}* | ${syllables}\n\n ${definition} \n\n ${example}`)
+    }
+
+}
+
 // const check_seek = async () => {
 //   const response = await axios.get(`https://www.seek.com.au/jobs-in-information-communication-technology/in-All-Hobart-TAS`)
 //
@@ -144,8 +183,11 @@ const build_list_of_ideas = (ideas) => {
 }
 
 
-for (const sub_name of Object.keys(subs)) {
-  check_reddit(sub_name, subs[sub_name], false)
-}
+//for (const sub_name of Object.keys(subs)) {
+//  check_reddit(sub_name, subs[sub_name], false)
+//}
 
-check_hackernews(HACKER_NEWS_THRESHOLD, HACKER_NEWS_CHANNELS, false)
+//check_hackernews(HACKER_NEWS_THRESHOLD, HACKER_NEWS_CHANNELS, false)
+
+
+//word_of_the_day(false);
